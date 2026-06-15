@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hAI.FinOro – AI Trading Agent for eToro</title>
+<style>
+  :root {
+    --bg: #060d1f;
+    --card: #0a1225;
+    --border: rgba(99,102,241,0.2);
+    --accent: #6366f1;
+    --accent2: #0ea5e9;
+    --green: #4ade80;
+    --yellow: #fde047;
+    --text: #cbd5e1;
+    --text-muted: #64748b;
+    --text-bright: #f1f5f9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  /* Hero */
+  .hero {
+    background: radial-gradient(ellipse at 60% 0%, rgba(99,102,241,0.15) 0%, transparent 60%),
+                radial-gradient(ellipse at 20% 80%, rgba(14,165,233,0.1) 0%, transparent 50%);
+    text-align: center; padding: 100px 24px 80px;
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.3);
+    color: #a5b4fc; font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+    padding: 5px 14px; border-radius: 999px; margin-bottom: 28px;
+    text-transform: uppercase;
+  }
+  .hero h1 {
+    font-size: clamp(42px, 8vw, 80px); font-weight: 900; line-height: 1.05;
+    background: linear-gradient(135deg, #f1f5f9 0%, #a5b4fc 40%, #38bdf8 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 20px;
+  }
+  .hero p {
+    font-size: 18px; color: var(--text-muted); max-width: 560px; margin: 0 auto 36px; line-height: 1.7;
+  }
+  .hero-buttons { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 600;
+    text-decoration: none; transition: all 0.15s;
+  }
+  .btn-primary { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(99,102,241,0.4); }
+  .btn-outline { background: transparent; color: #a5b4fc; border: 1px solid rgba(99,102,241,0.4); }
+  .btn-outline:hover { background: rgba(99,102,241,0.1); }
+
+  /* Badges row */
+  .badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 40px; }
+  .badges img { height: 22px; }
+
+  /* Section */
+  section { max-width: 1100px; margin: 0 auto; padding: 80px 24px; }
+  .section-label { font-size: 11px; color: var(--accent); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 12px; }
+  .section-title { font-size: 36px; font-weight: 800; color: var(--text-bright); margin-bottom: 14px; }
+  .section-sub   { font-size: 15px; color: var(--text-muted); max-width: 500px; line-height: 1.7; }
+
+  /* Feature grid */
+  .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 48px; }
+  .feature-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 28px 24px; transition: border-color 0.2s, transform 0.2s;
+  }
+  .feature-card:hover { border-color: rgba(99,102,241,0.5); transform: translateY(-3px); }
+  .feature-icon { font-size: 32px; margin-bottom: 16px; }
+  .feature-title { font-size: 16px; font-weight: 700; color: var(--text-bright); margin-bottom: 8px; }
+  .feature-desc  { font-size: 13px; color: var(--text-muted); line-height: 1.7; }
+
+  /* Pipeline */
+  .pipeline { display: flex; gap: 0; margin-top: 48px; flex-wrap: wrap; }
+  .pipe-step {
+    flex: 1; min-width: 180px;
+    background: var(--card); border: 1px solid var(--border);
+    padding: 24px 20px; position: relative;
+  }
+  .pipe-step:first-child { border-radius: 14px 0 0 14px; }
+  .pipe-step:last-child  { border-radius: 0 14px 14px 0; }
+  .pipe-step + .pipe-step { border-left: none; }
+  .pipe-num { font-size: 11px; color: var(--accent); font-weight: 700; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .pipe-title { font-size: 14px; font-weight: 700; color: var(--text-bright); margin-bottom: 6px; }
+  .pipe-desc  { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+  .pipe-badge {
+    display: inline-block; margin-top: 10px; padding: 2px 10px; border-radius: 999px;
+    font-size: 10px; font-weight: 600;
+  }
+  .pipe-active  { background: rgba(74,222,128,0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
+  .pipe-locked  { background: rgba(100,116,139,0.15); color: #94a3b8; border: 1px solid rgba(100,116,139,0.2); }
+
+  /* Code block */
+  .code-block {
+    background: #03070f; border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px 28px; margin-top: 32px; font-family: 'Fira Code', monospace;
+    font-size: 13px; color: #4ade80; overflow-x: auto; line-height: 1.8;
+  }
+  .code-block .c  { color: #64748b; }
+  .code-block .k  { color: #a5b4fc; }
+  .code-block .s  { color: #fde047; }
+
+  /* Security table */
+  .sec-table { width: 100%; border-collapse: collapse; margin-top: 32px; font-size: 13px; }
+  .sec-table th, .sec-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+  .sec-table th { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .sec-table td:first-child { color: #fca5a5; }
+  .sec-table td:last-child  { color: #4ade80; }
+
+  /* Footer */
+  footer {
+    text-align: center; padding: 40px 24px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted); font-size: 13px;
+  }
+  footer a { color: #a5b4fc; text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* Divider */
+  .divider { border: none; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">🤖 Open Source · Educational</div>
+  <h1>hAI.FinOro</h1>
+  <p>AI-powered Trading Agent for eToro — LLM signal generation, live market dashboard &amp; Flask web UI. Built for learning.</p>
+  <div class="hero-buttons">
+    <a href="https://github.com/jbkunama1/hAI.FinOro" class="btn btn-primary">⭐ View on GitHub</a>
+    <a href="https://github.com/jbkunama1/hAI.FinOro#-quick-start" class="btn btn-outline">🚀 Quick Start</a>
+  </div>
+  <div class="badges">
+    <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
+    <img src="https://img.shields.io/badge/Flask-3.x-000000?style=flat-square&logo=flask&logoColor=white" alt="Flask">
+    <img src="https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker">
+    <img src="https://img.shields.io/badge/eToro-API-00C851?style=flat-square" alt="eToro">
+    <img src="https://img.shields.io/badge/LLM-OpenAI_compatible-412991?style=flat-square&logo=openai&logoColor=white" alt="LLM">
+    <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" alt="MIT">
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section>
+  <div class="section-label">What it does</div>
+  <div class="section-title">Everything in one dashboard 📊</div>
+  <div class="section-sub">Monitor markets, get AI-powered trading signals, track your portfolio — all from a self-hosted web UI.</div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="feature-icon">📈</div>
+      <div class="feature-title">Live Market Prices</div>
+      <div class="feature-desc">Real-time prices for BTC, ETH, Gold, Oil, EUR/USD &amp; GBP/USD via eToro Public API. All in one grid.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🤖</div>
+      <div class="feature-title">LLM Signal Engine</div>
+      <div class="feature-desc">Sends OHLC candle data to any OpenAI-compatible LLM and gets back BUY / SELL / HOLD with reasoning.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📉</div>
+      <div class="feature-title">SMA Pre-Filter</div>
+      <div class="feature-desc">SMA20 vs SMA50 trend analysis runs before every LLM call — prevents counter-trend noise.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💼</div>
+      <div class="feature-title">Portfolio View</div>
+      <div class="feature-desc">See all open real-account positions, direction, P&amp;L percentage. Export to CSV anytime.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔍</div>
+      <div class="feature-title">Auto ID Resolver</div>
+      <div class="feature-desc">Automatically finds and saves eToro instrument IDs — no manual lookup needed.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔐</div>
+      <div class="feature-title">Security First</div>
+      <div class="feature-desc">Keys never in code. Stage 3 orders locked behind commented placeholder. All inputs validated.</div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- PIPELINE -->
+<section>
+  <div class="section-label">Agent Stages</div>
+  <div class="section-title">Three-stage trading pipeline 🚦</div>
+  <div class="section-sub">The agent moves through stages — from pure observation to live trading. Each stage must be deliberately activated.</div>
+  <div class="pipeline">
+    <div class="pipe-step">
+      <div class="pipe-num">STAGE 01</div>
+      <div class="pipe-title">👁 Observe</div>
+      <div class="pipe-desc">Fetch prices & candles. Calculate SMA20/SMA50. Log trend. No LLM call.</div>
+      <span class="pipe-badge pipe-active">✓ Active</span>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-num">STAGE 02</div>
+      <div class="pipe-title">🤖 Signals</div>
+      <div class="pipe-desc">SMA pre-filter → LLM analysis → BUY/SELL/HOLD with reasoning. No orders placed.</div>
+      <span class="pipe-badge pipe-active">✓ Active</span>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-num">STAGE 03</div>
+      <div class="pipe-title">⚡ Live Orders</div>
+      <div class="pipe-desc">Execute real trades via eToro Write API. Requires explicit unlock + write key.</div>
+      <span class="pipe-badge pipe-locked">🔒 Locked</span>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- INSTALL -->
+<section>
+  <div class="section-label">Get started</div>
+  <div class="section-title">Deploy in 4 steps 🚀</div>
+  <div class="code-block">
+<span class="c"># 1. Clone the repo</span>
+$ git clone https://github.com/jbkunama1/hAI.FinOro.git && cd hAI.FinOro
+
+<span class="c"># 2. Configure keys</span>
+$ cp config.example.json config.json
+$ nano config.json  <span class="c"># fill in API_KEY, USER_KEY, LLM_BASE_URL</span>
+
+<span class="c"># 3. Start with Docker</span>
+$ docker compose up --build -d
+
+<span class="c"># 4. Resolve instrument IDs (first run only)</span>
+<span class="c"># Open: http://localhost:5000/debug/instruments</span>
+<span class="c"># Click: 💾 Save IDs to config.json</span>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- SECURITY -->
+<section>
+  <div class="section-label">Security audit</div>
+  <div class="section-title">What we protect against 🔐</div>
+  <table class="sec-table">
+    <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>API key exposure</td><td>config.json in .gitignore, never hardcoded</td></tr>
+      <tr><td>Accidental live orders</td><td>Stage 3 locked behind commented placeholder</td></tr>
+      <tr><td>Unvalidated user input</td><td>Mode whitelisted, interval range-clamped, IDs digit-validated</td></tr>
+      <tr><td>LLM timeout DoS</td><td>60s hard timeout on all LLM requests</td></tr>
+      <tr><td>API timeout DoS</td><td>10s timeout on all eToro requests</td></tr>
+      <tr><td>Memory growth (log)</td><td>Log capped at 100 entries</td></tr>
+      <tr><td>Unhandled agent crash</td><td>try/except wraps entire agent_tick() in loop</td></tr>
+      <tr><td>Docker secret leak</td><td>config.json mounted as volume, not baked into image</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<hr class="divider">
+
+<!-- FOOTER -->
+<footer>
+  <div style="font-size:28px;margin-bottom:12px;">📈</div>
+  <div style="margin-bottom:8px;">
+    <strong style="color:#f1f5f9;">hAI.FinOro</strong> — Educational AI Trading Agent
+  </div>
+  <div style="margin-bottom:16px;">Built with 🤖 by <a href="https://github.com/jbkunama1">therealteacher</a> · Karlsruhe, Germany</div>
+  <div style="margin-bottom:12px;">
+    <a href="https://github.com/jbkunama1/hAI.FinOro">GitHub</a> ·
+    <a href="https://github.com/jbkunama1/hAI.FinOro/blob/main/README.md">Docs</a> ·
+    <a href="https://github.com/jbkunama1/hAI.FinOro/issues">Issues</a>
+  </div>
+  <div style="font-size:11px;color:#334155;">
+    ⚠️ Educational purposes only · Not financial advice · Trading involves risk
+  </div>
+</footer>
+
+</body>
+</html>

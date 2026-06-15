@@ -1,0 +1,15 @@
+{
+  "API_KEY": "YOUR_ETORO_PUBLIC_API_KEY",
+  "USER_KEY": "YOUR_ETORO_USER_KEY",
+  "API_URL": "https://public-api.etoro.com/api/v1",
+  "SANDBOX": false,
+  "LLM_BASE_URL": "https://your-llm-endpoint/v1",
+  "LLM_MODEL": "finance",
+  "LLM_API_KEY": "none",
+  "BTC_INSTRUMENT_ID": null,
+  "ETH_INSTRUMENT_ID": null,
+  "GOLD_INSTRUMENT_ID": null,
+  "OIL_INSTRUMENT_ID": null,
+  "EURUSD_INSTRUMENT_ID": null,
+  "GBPUSD_INSTRUMENT_ID": null
+}

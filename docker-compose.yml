@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  hai-finoro:
+    build: .
+    container_name: hai-finoro
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      # config.json is mounted from host – never baked into image
+      - ./config.json:/app/config.json:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
