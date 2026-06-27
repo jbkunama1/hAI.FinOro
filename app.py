@@ -21,7 +21,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-# ── Logging ─────────────────────────────────────────────────────────────────────
+# ── Logging ──────────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -289,25 +289,61 @@ def is_within_trade_window(cfg: dict) -> bool:
     return now_local >= start or now_local <= end
 
 
-# ── Preis-Abfrage ─────────────────────────────────────────────────────────────────
+# ── Preis-Abfrage (FIX: mehrere Endpunkt-Varianten + robusteres Parsing) ──────────
 def get_price(instrument_id: int) -> Optional[str]:
-    r = api_get("/market-data/instruments/rates", params={"instrumentIds": instrument_id})
-    if not r:
-        return None
-    if r.status_code != 200:
-        _log(f"Rates -> HTTP {r.status_code}: {r.text[:200]}")
-        return None
-    try:
-        data = r.json()
-    except ValueError as e:
-        _log(f"JSON-Fehler Rates {instrument_id}: {e}")
-        return None
-    rates = data.get("rates") or data.get("items") or []
-    if not rates:
-        return None
-    entry = rates[0]
-    val = entry.get("lastExecution") or entry.get("bid") or entry.get("ask")
-    return str(val) if val is not None else None
+    """
+    Versucht Preis über verschiedene eToro-Endpunkte.
+    Reihenfolge: rates-Endpunkt (v1) → instruments/{id}/rates → instruments/{id}
+    """
+    candidates = [
+        ("/market-data/instruments/rates", {"instrumentIds": instrument_id}),
+        (f"/market-data/instruments/{instrument_id}/rates", {}),
+        (f"/market-data/instruments/{instrument_id}", {}),
+    ]
+    for path, params in candidates:
+        r = api_get(path, params=params if params else None)
+        if not r or r.status_code != 200:
+            continue
+        try:
+            data = r.json()
+        except ValueError as e:
+            _log(f"JSON-Fehler {path}: {e}")
+            continue
+
+        # Flache Antwort (einzelnes Instrument direkt)
+        if isinstance(data, dict) and not any(k in data for k in ("rates", "items", "data")):
+            val = (
+                data.get("lastExecution")
+                or data.get("bid")
+                or data.get("ask")
+                or data.get("price")
+                or data.get("lastPrice")
+            )
+            if val is not None:
+                return str(val)
+
+        # Listen-Antwort
+        rates = (
+            data.get("rates")
+            or data.get("items")
+            or data.get("data")
+            or []
+        )
+        if isinstance(rates, list) and rates:
+            entry = rates[0]
+            val = (
+                entry.get("lastExecution")
+                or entry.get("bid")
+                or entry.get("ask")
+                or entry.get("price")
+                or entry.get("lastPrice")
+                or entry.get("closePrice")
+            )
+            if val is not None:
+                return str(val)
+
+    _log(f"get_price({instrument_id}): kein Preis gefunden")
+    return None
 
 
 def get_multi_prices(ids: dict) -> dict:
@@ -426,40 +462,48 @@ def test_api_keys(api_key: str, user_key: str, api_url_cfg: str) -> dict:
         )
         return result
 
-    try:
-        r = http.get(
-            f"{api_url_cfg}/market-data/instruments/rates",
-            headers={
-                "x-api-key":      api_key,
-                "x-user-key":     user_key,
-                "x-request-id":   str(uuid.uuid4()),
-                "Accept":         "application/json",
-            },
-            params={"instrumentIds": DEFAULT_CONFIG.get("BTC_INSTRUMENT_ID", 100134)},
-            timeout=TIMEOUT_API,
-        )
-    except requests.ConnectionError as e:
-        result["messages"].append(f"Verbindungsfehler: {e}")
-        return result
-    except requests.Timeout:
-        result["messages"].append("Timeout bei der eToro API.")
-        return result
-    except Exception as e:
-        result["messages"].append(f"Fehler: {e}")
-        return result
+    test_endpoints = [
+        f"{api_url_cfg}/market-data/instruments/rates",
+        f"{api_url_cfg}/market-data/instruments/100134/rates",
+        f"{api_url_cfg}/market-data/instruments/100134",
+    ]
+    for ep in test_endpoints:
+        try:
+            params = {"instrumentIds": DEFAULT_CONFIG.get("BTC_INSTRUMENT_ID", 100134)} if "rates" in ep and "/100134/rates" not in ep else {}
+            r = http.get(
+                ep,
+                headers={
+                    "x-api-key":    api_key,
+                    "x-user-key":   user_key,
+                    "x-request-id": str(uuid.uuid4()),
+                    "Accept":       "application/json",
+                },
+                params=params,
+                timeout=TIMEOUT_API,
+            )
+        except requests.ConnectionError as e:
+            result["messages"].append(f"Verbindungsfehler: {e}")
+            return result
+        except requests.Timeout:
+            result["messages"].append("Timeout bei der eToro API.")
+            return result
+        except Exception as e:
+            result["messages"].append(f"Fehler: {e}")
+            return result
 
-    if r.status_code == 200:
-        result["ok"] = True
-        result["messages"].append("✅ API-Key-Test erfolgreich.")
-        return result
-    if r.status_code == 401:
-        result["messages"].append("❌ 401 Unauthorized – prüfe API_KEY / USER_KEY.")
-    elif r.status_code == 403:
-        result["messages"].append("❌ 403 Forbidden.")
-    elif r.status_code == 404:
-        result["messages"].append(f"❌ 404 Not Found: {api_url_cfg}/market-data/instruments/rates")
-    else:
-        result["messages"].append(f"❌ HTTP {r.status_code}: {r.text[:200]}")
+        if r.status_code == 200:
+            result["ok"] = True
+            result["messages"].append(f"✅ API-Key-Test erfolgreich ({ep}).")
+            return result
+        if r.status_code == 401:
+            result["messages"].append("❌ 401 Unauthorized – prüfe API_KEY / USER_KEY.")
+            return result
+        if r.status_code == 403:
+            result["messages"].append(f"❌ 403 Forbidden ({ep}).")
+            return result
+        result["messages"].append(f"⚠ {ep} → HTTP {r.status_code}")
+
+    result["messages"].append("❌ Kein Endpunkt erreichbar.")
     return result
 
 
@@ -993,9 +1037,9 @@ def charts_orders():
         </div>"""
         return page("/charts/orders", "Orders-Chart", body)
 
-    labels    = json.dumps([r[0][:16] for r in reversed(rows)])
-    amounts   = json.dumps([r[3] for r in reversed(rows)])
-    colors    = json.dumps(["rgba(74,222,128,0.7)" if r[2].upper()=="BUY" else "rgba(248,113,113,0.7)" for r in reversed(rows)])
+    labels  = json.dumps([r[0][:16] for r in reversed(rows)])
+    amounts = json.dumps([r[3] for r in reversed(rows)])
+    colors  = json.dumps(["rgba(74,222,128,0.7)" if r[2].upper()=="BUY" else "rgba(248,113,113,0.7)" for r in reversed(rows)])
 
     body = f"""
     <div class="page-header"><h2>Orders-Chart</h2><p>Letzte {len(rows)} Orders aus SQLite</p></div>
@@ -1007,7 +1051,7 @@ def charts_orders():
         <table>
           <thead><tr><th>Zeit</th><th>Symbol</th><th>Richtung</th><th>Betrag</th></tr></thead>
           <tbody>
-            {"".join(f'<tr><td style=\"font-size:11px;color:var(--muted)\">{r[0][:19]}</td><td><span class=\"sym\">{r[1]}</span></td><td><span class=\"badge {\"badge-green\" if r[2].upper()==\"BUY\" else \"badge-red\"}\">{r[2]}</span></td><td>{r[3]}</td></tr>' for r in rows)}
+            {"".join(f'<tr><td style="font-size:11px;color:var(--muted)">{r[0][:19]}</td><td><span class="sym">{r[1]}</span></td><td><span class="badge {"badge-green" if r[2].upper()=="BUY" else "badge-red"}">{r[2]}</span></td><td>{r[3]}</td></tr>' for r in rows)}
           </tbody>
         </table>
       </div>
@@ -1329,14 +1373,13 @@ def debug_order():
         <div style="font-size:13px;font-weight:600;margin-bottom:14px;">📤 Test-Order senden</div>
         <div class="form-row">
           <div class="form-group">
-            <label>Instrument-ID</label>
+            <label>Instrument-ID (aus Config)</label>
             <select name="instrument_id">
               {id_opts}
-              <option value="">Manuell eingeben…</option>
             </select>
           </div>
           <div class="form-group">
-            <label>Instrument-ID (manuell)</label>
+            <label>Instrument-ID (manuell überschreiben)</label>
             <input name="instrument_id" placeholder="z.B. 897840" style="margin-top:4px;">
           </div>
         </div>
