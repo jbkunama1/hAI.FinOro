@@ -1,5 +1,9 @@
 # hAI.FinOro 🤖
 
+<a href="https://www.buymeacoffee.com/highfish">
+<img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174">
+</a>
+
 > **Minimalistischer autonomer Trading-Agent für eToro Agent-Portfolios**  
 > Self-hosted · Docker · LLM-Signal-Generierung · Flask Web-UI
 
@@ -129,3 +133,4 @@ MIT – siehe [LICENSE](LICENSE)
 ---
 
 *Built with ❤️ in Karlsruhe*
+
