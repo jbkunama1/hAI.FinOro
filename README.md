@@ -1,4 +1,10 @@
 # hAI.FinOro 🤖
+[![Status](https://img.shields.io/badge/status-active-brightgreen?style=for-the-badge)](https://github.com/jbkunama1/hAI.FinOro)
+[![Python](https://img.shields.io/badge/Python-Flask-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://github.com/jbkunama1/hAI.FinOro)
+[![AI](https://img.shields.io/badge/AI-Powered-8A2BE2?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/jbkunama1/hAI.FinOro)
+[![Trading](https://img.shields.io/badge/Trading-eToro-0081CB?style=for-the-badge&logo=tradingview&logoColor=white)](https://github.com/jbkunama1/hAI.FinOro)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+
 
 
 
