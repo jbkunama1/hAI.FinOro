@@ -176,70 +176,74 @@ def init_db() -> None:
                     signal TEXT
                 )
             """)
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS positions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ts TEXT NOT NULL,
-                instrument_id INTEGER,
-                symbol TEXT,
-                direction TEXT,
-                amount REAL,
-                entry_price REAL,
-                stop_loss_price REAL,
-                take_profit_price REAL,
-                status TEXT,
-                response_json TEXT
-            )
-        """)
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS daily_pnl (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ts TEXT NOT NULL,
-                symbol TEXT,
-                direction TEXT,
-                amount REAL,
-                entry_price REAL,
-                exit_price REAL,
-                pnl REAL,
-                response_json TEXT
-            )
-        """)
-        conn.commit()
+            # Create additional tables using a fresh connection to avoid using a closed cursor
+            with sqlite3.connect(DB_PATH) as conn2:
+                c2 = conn2.cursor()
+                c2.execute("""
+                    CREATE TABLE IF NOT EXISTS positions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ts TEXT NOT NULL,
+                        instrument_id INTEGER,
+                        symbol TEXT,
+                        direction TEXT,
+                        amount REAL,
+                        entry_price REAL,
+                        stop_loss_price REAL,
+                        take_profit_price REAL,
+                        status TEXT,
+                        response_json TEXT
+                    )
+                """)
+                c2.execute("""
+                    CREATE TABLE IF NOT EXISTS daily_pnl (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ts TEXT NOT NULL,
+                        symbol TEXT,
+                        direction TEXT,
+                        amount REAL,
+                        entry_price REAL,
+                        exit_price REAL,
+                        pnl REAL,
+                        response_json TEXT
+                    )
+                """)
+                conn2.commit()
         _log(f"SQLite-DB initialisiert: {DB_PATH}")
     except sqlite3.Error as e:
         _log(f"SQLite-Fehler bei init_db: {e}")
 
-            # Helper functions for risk management
-            def get_position(instrument_id: int) -> Optional[dict]:
-       """Get current open position for an instrument."""
-       try:
+# Helper functions for risk management
+
+def get_position(instrument_id: int) -> Optional[dict]:
+    """Get current open position for an instrument."""
+    try:
         with sqlite3.connect(DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute("SELECT * FROM positions WHERE status='open' AND instrument_id=? LIMIT 1", (instrument_id,))
             row = c.fetchone()
             return dict(row) if row else None
-       except sqlite3.Error as e:
+    except sqlite3.Error as e:
         _log(f"SQLite-Fehler beim Abrufen der Position: {e}")
         return None
 
-            def get_daily_trades(symbol: str, date: str = None) -> list[dict]:
-       """Get all trades for a symbol on a specific day."""
-       if date is None:
+def get_daily_trades(symbol: str, date: str = None) -> list[dict]:
+    """Get all trades for a symbol on a specific day."""
+    if date is None:
         date = datetime.utcnow().strftime("%Y-%m-%d")
-       try:
+    try:
         with sqlite3.connect(DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute("SELECT * FROM daily_pnl WHERE symbol=? AND DATE(ts)=? LIMIT 1", (symbol, date))
             return [dict(row) for row in c.fetchall()]
-       except sqlite3.Error as e:
+    except sqlite3.Error as e:
         _log(f"SQLite-Fehler beim Abrufen der täglichen Trades: {e}")
         return []
 
-            def get_open_positions(symbol: str = None) -> list[dict]:
-       """Get all open positions, optionally filtered by symbol."""
-       try:
+def get_open_positions(symbol: str = None) -> list[dict]:
+    """Get all open positions, optionally filtered by symbol."""
+    try:
         with sqlite3.connect(DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
@@ -248,42 +252,43 @@ def init_db() -> None:
             else:
                 c.execute("SELECT * FROM positions WHERE status='open'")
             return [dict(row) for row in c.fetchall()]
-       except sqlite3.Error as e:
+    except sqlite3.Error as e:
         _log(f"SQLite-Fehler beim Abrufen offener Positionen: {e}")
         return []
 
-            def get_daily_pnl_summary(symbol: str, date: str = None) -> float:
-       """Get total P&L for a symbol on a specific day."""
-       if date is None:
+def get_daily_pnl_summary(symbol: str, date: str = None) -> float:
+    """Get total P&L for a symbol on a specific day."""
+    if date is None:
         date = datetime.utcnow().strftime("%Y-%m-%d")
-       try:
+    try:
         with sqlite3.connect(DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute("SELECT SUM(pnl) as total FROM daily_pnl WHERE symbol=? AND DATE(ts)=?", (symbol, date))
             result = c.fetchone()
             return float(result[0]) if result[0] is not None else 0.0
-       except sqlite3.Error as e:
+    except sqlite3.Error as e:
         _log(f"SQLite-Fehler beim Abrufen des täglichen P&L-Summaries: {e}")
         return 0.0
 
-            def update_position_status(position_id: int, status: str) -> bool:
-       """Update the status of a position."""
-       try:
+def update_position_status(position_id: int, status: str) -> bool:
+    """Update the status of a position."""
+    try:
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             c.execute("UPDATE positions SET status=? WHERE id=?", (status, position_id))
             changed = c.rowcount > 0
             conn.commit()
             return changed
-       except sqlite3.Error as e:
+    except sqlite3.Error as e:
         _log(f"SQLite-Fehler beim Aktualisieren des Positionsstatus: {e}")
         return False
 
-            # Risk validation functions
-            def check_daily_loss_limit(symbol: str, new_pnl: float) -> bool:
-       """Check if adding new P&L would exceed daily loss limit."""
-       try:
+# Risk validation functions
+
+def check_daily_loss_limit(symbol: str, new_pnl: float) -> bool:
+    """Check if adding new P&L would exceed daily loss limit."""
+    try:
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             c.execute("SELECT MAX(pnl) as max_daily, MIN(pnl) as min_daily, SUM(pnl) as cumulative FROM daily_pnl WHERE symbol=? AND DATE(ts)=DATE('now')", (symbol,))
@@ -295,25 +300,25 @@ def init_db() -> None:
                 _log(f"Hit daily loss limit for {symbol}")
                 return False
             return True
-       except sqlite3.Error as e:
+    except sqlite3.Error as e:
         _log(f"SQLite-Fehler beim Prüfen der Verlustgrenze: {e}")
         return False
 
-            def check_drawdown_limit(symbol: str, pnl: float) -> bool:
-       """Check if adding new P&L would exceed max drawdown."""
-       try:
+def check_drawdown_limit(symbol: str, pnl: float) -> bool:
+    """Check if adding new P&L would exceed max drawdown."""
+    try:
         total_pnl = get_daily_pnl_summary(symbol) + pnl
         if MAX_DRAWDOWN_PCT > 0 and abs(total_pnl) > (abs(get_daily_pnl_summary(symbol)) * MAX_DRAWDOWN_PCT / 100):
             _log(f"Hit drawdown limit for {symbol}")
             return False
         return True
-       except Exception as e:
+    except Exception as e:
         _log(f"Beim Prüfen der Drawdown-Grenze Probleme: {e}")
         return False
 
-            def check_position_size_limit(instrument_id: int) -> bool:
-       """Check if adding to position would exceed max position size."""
-       try:
+def check_position_size_limit(instrument_id: int) -> bool:
+    """Check if adding to position would exceed max position size."""
+    try:
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             c.execute("SELECT MAX(amount) as max_size FROM positions WHERE instrument_id=? AND status='open'", (instrument_id,))
@@ -322,14 +327,14 @@ def init_db() -> None:
                 _log(f"Hit position size limit for instrument {instrument_id}")
                 return False
             return True
-       except Exception as e:
+    except Exception as e:
         _log(f"Beim Prüfen der Positionsgröße Probleme: {e}")
         return False
 
-            def calculate_risk_score(pnl: float) -> float:
-       """Calculate a risk score based on P&L."""
-       # Simple risk scoring - lower is better
-       return max(0.0, abs(pnl) / MAX_DAILY_LOSS if MAX_DAILY_LOSS > 0 else 0.0)
+def calculate_risk_score(pnl: float) -> float:
+    """Calculate a risk score based on P&L."""
+    # Simple risk scoring - lower is better
+    return max(0.0, abs(pnl) / MAX_DAILY_LOSS if MAX_DAILY_LOSS > 0 else 0.0)
 
 
 def log_order(instrument_id: int, symbol: str, direction: str, amount: float, response: dict) -> None:
