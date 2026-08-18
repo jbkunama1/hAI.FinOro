@@ -214,6 +214,12 @@ def init_db() -> None:
 
 # Helper functions for risk management
 
+# Load config constants for risk limits
+_CFG = load_config()
+MAX_DAILY_LOSS = _CFG.get("MAX_DAILY_LOSS", 0.0)
+MAX_DRAWDOWN_PCT = _CFG.get("MAX_DRAWDOWN_PCT", 0.0)
+MAX_POSITION_SIZE = _CFG.get("MAX_POSITION_SIZE", 0.0)
+
 def get_position(instrument_id: int) -> Optional[dict]:
     """Get current open position for an instrument."""
     try:
@@ -291,12 +297,13 @@ def check_daily_loss_limit(symbol: str, new_pnl: float) -> bool:
     try:
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
-            c.execute("SELECT MAX(pnl) as max_daily, MIN(pnl) as min_daily, SUM(pnl) as cumulative FROM daily_pnl WHERE symbol=? AND DATE(ts)=DATE('now')", (symbol,))
-            max_daily, min_daily, cumulative = c.fetchone()
-            if max_daily is not None and max_daily > MAX_DAILY_LOSS:
-                _log(f"Hit daily profit limit for {symbol}")
+            c.execute("SELECT SUM(pnl) as cumulative FROM daily_pnl WHERE symbol=? AND DATE(ts)=DATE('now')", (symbol,))
+            result = c.fetchone()
+            cumulative = result[0] if result[0] is not None else 0.0
+            if cumulative > MAX_DAILY_LOSS:
+                _log(f"Hit daily loss limit for {symbol}")
                 return False
-            if min_daily is not None and min_daily < -MAX_DAILY_LOSS:
+            if cumulative < -MAX_DAILY_LOSS:
                 _log(f"Hit daily loss limit for {symbol}")
                 return False
             return True
@@ -304,11 +311,31 @@ def check_daily_loss_limit(symbol: str, new_pnl: float) -> bool:
         _log(f"SQLite-Fehler beim Prüfen der Verlustgrenze: {e}")
         return False
 
-def check_drawdown_limit(symbol: str, pnl: float) -> bool:
-    """Check if adding new P&L would exceed max drawdown."""
+def check_drawdrawdown_limit(symbol: str, pnl: float) -> bool:
+    """Check if adding new P&L would exceed max drawdown.
+    Uses daily peak cumulative P&L to compute allowable drawdown.
+    Does not trigger when there is no prior P&L (base == 0)."""
     try:
-        total_pnl = get_daily_pnl_summary(symbol) + pnl
-        if MAX_DRAWDOWN_PCT > 0 and abs(total_pnl) > (abs(get_daily_pnl_summary(symbol)) * MAX_DRAWDOWN_PCT / 100):
+        # Get all daily P&L entries for today
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            c.execute("SELECT ts, pnl FROM daily_pnl WHERE symbol=? AND DATE(ts)=DATE('now') ORDER BY ts", (symbol,))
+            rows = c.fetchall()
+        # Compute cumulative P&L sequence
+        cumulative = 0.0
+        max_cumulative = 0.0
+        for row in rows:
+            cumulative += row[1]
+            if cumulative > max_cumulative:
+                max_cumulative = cumulative
+        # If no prior P&L, allow
+        if max_cumulative == 0:
+            return True
+        # Projected cumulative after new trade
+        projected = cumulative + pnl
+        # Allowable minimum based on drawdown percent
+        allowed_min = max_cumulative * (1 - MAX_DRAWDOWN_PCT / 100.0)
+        if projected < allowed_min:
             _log(f"Hit drawdown limit for {symbol}")
             return False
         return True
