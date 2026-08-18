@@ -176,10 +176,8 @@ def init_db() -> None:
                     signal TEXT
                 )
             """)
-            # Create additional tables using a fresh connection to avoid using a closed cursor
-            with sqlite3.connect(DB_PATH) as conn2:
-                c2 = conn2.cursor()
-                c2.execute("""
+            # Create additional tables within the same connection
+            c.execute("""
                     CREATE TABLE IF NOT EXISTS positions (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         ts TEXT NOT NULL,
@@ -193,8 +191,8 @@ def init_db() -> None:
                         status TEXT,
                         response_json TEXT
                     )
-                """)
-                c2.execute("""
+                    """)
+            c.execute("""
                     CREATE TABLE IF NOT EXISTS daily_pnl (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         ts TEXT NOT NULL,
@@ -206,8 +204,7 @@ def init_db() -> None:
                         pnl REAL,
                         response_json TEXT
                     )
-                """)
-                conn2.commit()
+                    """)
         _log(f"SQLite-DB initialisiert: {DB_PATH}")
     except sqlite3.Error as e:
         _log(f"SQLite-Fehler bei init_db: {e}")
