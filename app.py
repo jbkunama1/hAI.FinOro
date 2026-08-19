@@ -79,6 +79,13 @@ DEFAULT_CONFIG: dict = {
     "MODE":                 "observe",
     "INTERVAL":             300,
     "TRADE_AMOUNT":         0.0,
+    "MAX_TRADE_AMOUNT":     0.0,
+    "MAX_POSITION_SIZE":    0.0,
+    "STOP_LOSS_PCT":        0.0,
+    "TAKE_PROFIT_PCT":      0.0,
+    "MAX_DAILY_LOSS":       0.0,
+    "MAX_DRAWDOWN_PCT":     0.0,
+    "RISK_PER_TRADE_PCT":   0.0,
     "MARKET_TIMEZONE":      "Europe/Berlin",
     "TRADE_START":          "08:00",
     "TRADE_END":            "22:00",
@@ -94,24 +101,42 @@ DEFAULT_CONFIG: dict = {
 
 
 def load_config() -> dict:
+    """Load config from config.json with environment variable overrides for secrets."""
+    # Start with default config
+    data = DEFAULT_CONFIG.copy()
+    
+    # Load from config.json if exists
     try:
         with open(CONFIG_PATH) as f:
-            data = json.load(f)
-        updated = False
-        for k, v in DEFAULT_CONFIG.items():
-            if k not in data:
-                data[k] = v
-                updated = True
-        if updated:
-            save_config(data)
-        return data
+            file_data = json.load(f)
+        data.update(file_data)
     except FileNotFoundError:
         _log(f"config.json nicht vorhanden – erstelle neue unter: {CONFIG_PATH}")
-        save_config(DEFAULT_CONFIG.copy())
-        return DEFAULT_CONFIG.copy()
     except json.JSONDecodeError as e:
         _log(f"config.json JSON-Fehler: {e} – verwende Defaults")
-        return DEFAULT_CONFIG.copy()
+    
+    # Environment variable overrides for secrets (never committed to git)
+    env_overrides = {
+        "API_KEY": os.environ.get("ETORO_API_KEY"),
+        "USER_KEY": os.environ.get("ETORO_USER_KEY"),
+        "ADMIN_PASSWORD": os.environ.get("ADMIN_PASSWORD"),
+        "SECRET_KEY": os.environ.get("SECRET_KEY"),
+        "LLM_API_KEY": os.environ.get("LLM_API_KEY"),
+    }
+    for key, value in env_overrides.items():
+        if value is not None:
+            data[key] = value
+    
+    # Ensure all default keys exist (for new config additions)
+    updated = False
+    for k, v in DEFAULT_CONFIG.items():
+        if k not in data:
+            data[k] = v
+            updated = True
+    
+    if updated:
+        save_config(data)
+    return data
 
 
 def save_config(cfg: dict) -> None:
@@ -151,10 +176,189 @@ def init_db() -> None:
                     signal TEXT
                 )
             """)
-            conn.commit()
+            # Create additional tables within the same connection
+            c.execute("""
+                    CREATE TABLE IF NOT EXISTS positions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ts TEXT NOT NULL,
+                        instrument_id INTEGER,
+                        symbol TEXT,
+                        direction TEXT,
+                        amount REAL,
+                        entry_price REAL,
+                        stop_loss_price REAL,
+                        take_profit_price REAL,
+                        status TEXT,
+                        response_json TEXT
+                    )
+                    """)
+            c.execute("""
+                    CREATE TABLE IF NOT EXISTS daily_pnl (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ts TEXT NOT NULL,
+                        symbol TEXT,
+                        direction TEXT,
+                        amount REAL,
+                        entry_price REAL,
+                        exit_price REAL,
+                        pnl REAL,
+                        response_json TEXT
+                    )
+                    """)
         _log(f"SQLite-DB initialisiert: {DB_PATH}")
     except sqlite3.Error as e:
         _log(f"SQLite-Fehler bei init_db: {e}")
+
+# Helper functions for risk management
+
+# Load config constants for risk limits
+_CFG = load_config()
+MAX_DAILY_LOSS = _CFG.get("MAX_DAILY_LOSS", 0.0)
+MAX_DRAWDOWN_PCT = _CFG.get("MAX_DRAWDOWN_PCT", 0.0)
+MAX_POSITION_SIZE = _CFG.get("MAX_POSITION_SIZE", 0.0)
+
+def get_position(instrument_id: int) -> Optional[dict]:
+    """Get current open position for an instrument."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT * FROM positions WHERE status='open' AND instrument_id=? LIMIT 1", (instrument_id,))
+            row = c.fetchone()
+            return dict(row) if row else None
+    except sqlite3.Error as e:
+        _log(f"SQLite-Fehler beim Abrufen der Position: {e}")
+        return None
+
+def get_daily_trades(symbol: str, date: str = None) -> list[dict]:
+    """Get all trades for a symbol on a specific day."""
+    if date is None:
+        date = datetime.utcnow().strftime("%Y-%m-%d")
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT * FROM daily_pnl WHERE symbol=? AND DATE(ts)=? LIMIT 1", (symbol, date))
+            return [dict(row) for row in c.fetchall()]
+    except sqlite3.Error as e:
+        _log(f"SQLite-Fehler beim Abrufen der täglichen Trades: {e}")
+        return []
+
+def get_open_positions(symbol: str = None) -> list[dict]:
+    """Get all open positions, optionally filtered by symbol."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            if symbol:
+                c.execute("SELECT * FROM positions WHERE status='open' AND symbol=? LIMIT 1", (symbol,))
+            else:
+                c.execute("SELECT * FROM positions WHERE status='open'")
+            return [dict(row) for row in c.fetchall()]
+    except sqlite3.Error as e:
+        _log(f"SQLite-Fehler beim Abrufen offener Positionen: {e}")
+        return []
+
+def get_daily_pnl_summary(symbol: str, date: str = None) -> float:
+    """Get total P&L for a symbol on a specific day."""
+    if date is None:
+        date = datetime.utcnow().strftime("%Y-%m-%d")
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT SUM(pnl) as total FROM daily_pnl WHERE symbol=? AND DATE(ts)=?", (symbol, date))
+            result = c.fetchone()
+            return float(result[0]) if result[0] is not None else 0.0
+    except sqlite3.Error as e:
+        _log(f"SQLite-Fehler beim Abrufen des täglichen P&L-Summaries: {e}")
+        return 0.0
+
+def update_position_status(position_id: int, status: str) -> bool:
+    """Update the status of a position."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            c.execute("UPDATE positions SET status=? WHERE id=?", (status, position_id))
+            changed = c.rowcount > 0
+            conn.commit()
+            return changed
+    except sqlite3.Error as e:
+        _log(f"SQLite-Fehler beim Aktualisieren des Positionsstatus: {e}")
+        return False
+
+# Risk validation functions
+
+def check_daily_loss_limit(symbol: str, new_pnl: float) -> bool:
+    """Check if adding new P&L would exceed daily loss limit."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            c.execute("SELECT SUM(pnl) as cumulative FROM daily_pnl WHERE symbol=? AND DATE(ts)=DATE('now')", (symbol,))
+            result = c.fetchone()
+            cumulative = result[0] if result[0] is not None else 0.0
+            if cumulative > MAX_DAILY_LOSS:
+                _log(f"Hit daily loss limit for {symbol}")
+                return False
+            if cumulative < -MAX_DAILY_LOSS:
+                _log(f"Hit daily loss limit for {symbol}")
+                return False
+            return True
+    except sqlite3.Error as e:
+        _log(f"SQLite-Fehler beim Prüfen der Verlustgrenze: {e}")
+        return False
+
+def check_drawdrawdown_limit(symbol: str, pnl: float) -> bool:
+    """Check if adding new P&L would exceed max drawdown.
+    Uses daily peak cumulative P&L to compute allowable drawdown.
+    Does not trigger when there is no prior P&L (base == 0)."""
+    try:
+        # Get all daily P&L entries for today
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            c.execute("SELECT ts, pnl FROM daily_pnl WHERE symbol=? AND DATE(ts)=DATE('now') ORDER BY ts", (symbol,))
+            rows = c.fetchall()
+        # Compute cumulative P&L sequence
+        cumulative = 0.0
+        max_cumulative = 0.0
+        for row in rows:
+            cumulative += row[1]
+            if cumulative > max_cumulative:
+                max_cumulative = cumulative
+        # If no prior P&L, allow
+        if max_cumulative == 0:
+            return True
+        # Projected cumulative after new trade
+        projected = cumulative + pnl
+        # Allowable minimum based on drawdown percent
+        allowed_min = max_cumulative * (1 - MAX_DRAWDOWN_PCT / 100.0)
+        if projected < allowed_min:
+            _log(f"Hit drawdown limit for {symbol}")
+            return False
+        return True
+    except Exception as e:
+        _log(f"Beim Prüfen der Drawdown-Grenze Probleme: {e}")
+        return False
+
+def check_position_size_limit(instrument_id: int) -> bool:
+    """Check if adding to position would exceed max position size."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            c.execute("SELECT MAX(amount) as max_size FROM positions WHERE instrument_id=? AND status='open'", (instrument_id,))
+            max_size = c.fetchone()[0]
+            if max_size is not None and max_size > MAX_POSITION_SIZE:
+                _log(f"Hit position size limit for instrument {instrument_id}")
+                return False
+            return True
+    except Exception as e:
+        _log(f"Beim Prüfen der Positionsgröße Probleme: {e}")
+        return False
+
+def calculate_risk_score(pnl: float) -> float:
+    """Calculate a risk score based on P&L."""
+    # Simple risk scoring - lower is better
+    return max(0.0, abs(pnl) / MAX_DAILY_LOSS if MAX_DAILY_LOSS > 0 else 0.0)
 
 
 def log_order(instrument_id: int, symbol: str, direction: str, amount: float, response: dict) -> None:
