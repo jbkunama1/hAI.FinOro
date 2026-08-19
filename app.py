@@ -178,33 +178,33 @@ def init_db() -> None:
             """)
             # Create additional tables within the same connection
             c.execute("""
-                    CREATE TABLE IF NOT EXISTS positions (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        ts TEXT NOT NULL,
-                        instrument_id INTEGER,
-                        symbol TEXT,
-                        direction TEXT,
-                        amount REAL,
-                        entry_price REAL,
-                        stop_loss_price REAL,
-                        take_profit_price REAL,
-                        status TEXT,
-                        response_json TEXT
-                    )
-                    """)
+                CREATE TABLE IF NOT EXISTS positions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts TEXT NOT NULL,
+                    instrument_id INTEGER,
+                    symbol TEXT,
+                    direction TEXT,
+                    amount REAL,
+                    entry_price REAL,
+                    stop_loss_price REAL,
+                    take_profit_price REAL,
+                    status TEXT,
+                    response_json TEXT
+                )
+            """)
             c.execute("""
-                    CREATE TABLE IF NOT EXISTS daily_pnl (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        ts TEXT NOT NULL,
-                        symbol TEXT,
-                        direction TEXT,
-                        amount REAL,
-                        entry_price REAL,
-                        exit_price REAL,
-                        pnl REAL,
-                        response_json TEXT
-                    )
-                    """)
+                CREATE TABLE IF NOT EXISTS daily_pnl (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts TEXT NOT NULL,
+                    symbol TEXT,
+                    direction TEXT,
+                    amount REAL,
+                    entry_price REAL,
+                    exit_price REAL,
+                    pnl REAL,
+                    response_json TEXT
+                )
+            """)
         _log(f"SQLite-DB initialisiert: {DB_PATH}")
     except sqlite3.Error as e:
         _log(f"SQLite-Fehler bei init_db: {e}")
@@ -297,18 +297,16 @@ def check_daily_loss_limit(symbol: str, new_pnl: float) -> bool:
             c.execute("SELECT SUM(pnl) as cumulative FROM daily_pnl WHERE symbol=? AND DATE(ts)=DATE('now')", (symbol,))
             result = c.fetchone()
             cumulative = result[0] if result[0] is not None else 0.0
-            if cumulative > MAX_DAILY_LOSS:
-                _log(f"Hit daily loss limit for {symbol}")
-                return False
-            if cumulative < -MAX_DAILY_LOSS:
-                _log(f"Hit daily loss limit for {symbol}")
+            projected = cumulative + new_pnl
+            if abs(projected) > MAX_DAILY_LOSS:
+                _log(f"Hit daily loss limit for {symbol} (Projected: {projected})")
                 return False
             return True
     except sqlite3.Error as e:
         _log(f"SQLite-Fehler beim Prüfen der Verlustgrenze: {e}")
         return False
 
-def check_drawdrawdown_limit(symbol: str, pnl: float) -> bool:
+def check_drawdown_limit(symbol: str, pnl: float) -> bool:
     """Check if adding new P&L would exceed max drawdown.
     Uses daily peak cumulative P&L to compute allowable drawdown.
     Does not trigger when there is no prior P&L (base == 0)."""
