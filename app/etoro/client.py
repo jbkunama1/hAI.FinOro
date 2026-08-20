@@ -44,10 +44,15 @@ class EtoroClient:
             return response.json()
         except httpx.HTTPStatusError as e:
             log.error(f"eToro API HTTP error for {url}: {e.response.status_code} - {e.response.text}")
+            # Try to parse JSON response, fallback to raw text if not valid JSON
+            try:
+                response_data = e.response.json()
+            except json.JSONDecodeError:
+                response_data = e.response.text
             if e.response.status_code == 429:
                 retry_after = int(e.response.headers.get("Retry-After", 0))
-                raise RateLimitError(status_code=e.response.status_code, response_data=e.response.json(), retry_after=retry_after)
-            raise EtoroApiError(f"HTTP error: {e.response.status_code} {e.response.text}", status_code=e.response.status_code, response_data=e.response.json()) from e
+                raise RateLimitError(status_code=e.response.status_code, response_data=response_data, retry_after=retry_after)
+            raise EtoroApiError(f"HTTP error: {e.response.status_code} {e.response.text}", status_code=e.response.status_code, response_data=response_data) from e
         except httpx.RequestError as e:
             log.error(f"eToro API request error for {url}: {e}")
             raise EtoroApiError(f"Request error: {e}") from e
