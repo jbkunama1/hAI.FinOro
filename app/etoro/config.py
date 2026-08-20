@@ -1,5 +1,6 @@
 ﻿# app/etoro/config.py
-from pydantic import BaseSettings, Field, PositiveFloat, conint, validator
+from pydantic import Field, PositiveFloat, conint
+from pydantic_settings import BaseSettings, SettingsConfigDict, field_validator
 from typing import Optional
 
 class EtoroConfig(BaseSettings):
@@ -8,7 +9,7 @@ class EtoroConfig(BaseSettings):
     user_key: str = Field(..., env="ETORO_USER_KEY")
     
     # Secrets
-    secret_key: str = Field(default_factory=lambda: "change-me".encrypt())  # placeholder
+    secret_key: str = Field(default="change-me")
     
     # Core URLs
     api_url: str = Field(..., env="ETORO_API_URL")
@@ -36,8 +37,7 @@ class EtoroConfig(BaseSettings):
     risk_per_trade_pct: PositiveFloat = Field(5.0, env="ETORO_RISK_PER_TRADE_PCT")
     
     # LLM
-    llm_url: str = Field(default="https://9router.arbeitermili.eu/v1")
-    llm_url: str = Field(..., env="LLM_URL")
+    llm_url: str = Field(default="https://9router.arbeitermili.eu/v1", env="LLM_URL")
     llm_model: str = Field(default="finance", env="LLM_MODEL")
     llm_api_key: str = Field(default_factory=lambda: "", env="LLM_API_KEY")
 
@@ -45,11 +45,9 @@ class EtoroConfig(BaseSettings):
     app_port: int = Field(8080, env="APP_PORT")
     log_level: str = Field("INFO", env="LOG_LEVEL")
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    @validator("symbol_allowlist", pre=True)
+    @field_validator("symbol_allowlist", mode="before")
     def allowlist_list(cls, v):
         if isinstance(v, str):
             # allow direct comma-separated string
