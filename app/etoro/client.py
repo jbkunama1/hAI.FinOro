@@ -35,7 +35,7 @@ class EtoroClient:
 
     def _request(self, method: str, path: str, client_type: str = "api", **kwargs) -> Any:
         client = self._client if client_type == "api" else self._base_client
-        url = urljoin(str(client.base_url), path)  # Ensure path is relative
+        url = path  # Use relative path; httpx client base_url resolves full URL
 
         try:
             log.debug(f"Requesting {method} {url} with client {client_type}")

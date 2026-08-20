@@ -52,9 +52,9 @@ def check_daily_loss(pnl: float, config: EtoroConfig) -> None:
     """Enforce the maximum daily loss limit.
 
     ``pnl`` is the cumulative profit‑and‑loss for the current UTC day.  If it
-    drops below ``-config.MAX_DAILY_LOSS`` the guard blocks the trade.
+    drops below ``-config.max_daily_loss`` the guard blocks the trade.
     """
-    limit = getattr(config, "MAX_DAILY_LOSS", None)
+    limit = getattr(config, "max_daily_loss", None)
     if limit is not None and pnl < -limit:
         _write_audit({"type": "daily_loss", "pnl": pnl, "limit": limit, "action": "blocked"})
         raise SafetyViolation("daily_loss", f"Cumulative loss {pnl:.2f} exceeds limit {limit:.2f}")
@@ -65,9 +65,9 @@ def check_drawdown(equity: float, peak: float, config: EtoroConfig) -> None:
 
     ``equity`` – current total equity.
     ``peak``   – highest equity observed earlier today (or since the bot started).
-    ``config.MAX_DRAWDOWN_PCT`` is expressed as a percent value.
+    ``config.max_drawdown_pct`` is expressed as a percent value.
     """
-    max_pct = getattr(config, "MAX_DRAWDOWN_PCT", None)
+    max_pct = getattr(config, "max_drawdown_pct", None)
     if max_pct is not None:
         # ``peak`` may equal ``equity`` at start; avoid division‑by‑zero.
         if peak > 0:
@@ -96,7 +96,7 @@ def check_position_size(units: float, config: EtoroConfig) -> None:
     negative for a sell). ``MAX_POSITION_SIZE`` is defined in the same currency
     units as ``units`` (e.g., USD for stocks, BTC for crypto).
     """
-    limit = getattr(config, "MAX_POSITION_SIZE", None)
+    limit = getattr(config, "max_position_size", None)
     if limit is not None and abs(units) > limit:
         _write_audit({"type": "position_size", "units": units, "limit": limit, "action": "blocked"})
         raise SafetyViolation(

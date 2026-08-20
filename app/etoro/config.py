@@ -1,5 +1,5 @@
 ﻿# app/etoro/config.py
-from pydantic import Field, PositiveFloat, conint
+from pydantic import Field, PositiveFloat, PositiveInt, conint
 from pydantic_settings import BaseSettings, SettingsConfigDict, field_validator
 from typing import Optional
 
@@ -24,7 +24,9 @@ class EtoroConfig(BaseSettings):
     # Limits
     max_trade_usd: PositiveFloat = Field(500.0, env="ETORO_MAX_TRADE_USD")
     max_daily_trade_usd: PositiveFloat = Field(1000.0, env="ETORO_MAX_DAILY_TRADE_USD")
-    max_position_size: PositiveFloat = Field(25.0, env="ETORO_MAX_OPEN_POSITIONS")
+    # Position limits
+    max_open_positions: PositiveInt = Field(25, env="ETORO_MAX_OPEN_POSITIONS")
+    max_position_size: PositiveFloat = Field(25.0, env="ETORO_MAX_TRADE_SIZE")
     symbol_allowlist: list[str] = Field(default_factory=list, env="ETORO_SYMBOL_ALLOWLIST")
     
     # Trading schedule
