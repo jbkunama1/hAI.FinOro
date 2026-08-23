@@ -1,0 +1,22 @@
+name: Trufflehog Security Scan
+
+on:
+  push:
+    branches: ["main", "performance-improvements-sqlite-pooling"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  trufflehog-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trufflehog Scan
+        uses: trufflesecurity/trufflehog@v3
+        with:
+          # Scan the whole repository for secrets
+          scan: .
+          # Exclude known false positives (optional)
+          #exclude-patterns: "*.png,*.jpg"

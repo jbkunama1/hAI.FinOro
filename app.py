@@ -21,6 +21,17 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+
+def configure_sqlite_connection(conn):
+    """Apply SQLite performance optimizations for better write throughput.
+    
+    Uses MEMORY journal mode for faster operations (suitable for single-user app).
+    Uses NORMAL synchronous for balance of safety and speed.
+    """
+    conn.execute("PRAGMA journal_mode=MEMORY;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA foreign_keys=ON;")
+
 # ── Logging ──────────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -130,6 +141,7 @@ DB_PATH     = _cfg_for_db.get("DB_PATH", "finoro.db")
 def init_db() -> None:
     try:
         with sqlite3.connect(DB_PATH) as conn:
+            configure_sqlite_connection(conn)
             c = conn.cursor()
             c.execute("""
                 CREATE TABLE IF NOT EXISTS orders (
@@ -160,6 +172,7 @@ def init_db() -> None:
 def log_order(instrument_id: int, symbol: str, direction: str, amount: float, response: dict) -> None:
     try:
         with sqlite3.connect(DB_PATH) as conn:
+            configure_sqlite_connection(conn)
             c = conn.cursor()
             c.execute(
                 "INSERT INTO orders (ts, instrument_id, symbol, direction, amount, response_json) VALUES (?, ?, ?, ?, ?, ?)",
@@ -173,6 +186,7 @@ def log_order(instrument_id: int, symbol: str, direction: str, amount: float, re
 def log_signal(mode: str, prices: dict, signal: str) -> None:
     try:
         with sqlite3.connect(DB_PATH) as conn:
+            configure_sqlite_connection(conn)
             c = conn.cursor()
             c.execute(
                 "INSERT INTO signals (ts, mode, prices_json, signal) VALUES (?, ?, ?, ?)",
@@ -1022,6 +1036,7 @@ def config():
 def charts_orders():
     try:
         with sqlite3.connect(DB_PATH) as conn:
+            configure_sqlite_connection(conn)
             c = conn.cursor()
             c.execute("SELECT ts, symbol, direction, amount FROM orders ORDER BY id DESC LIMIT 100")
             rows = c.fetchall()
