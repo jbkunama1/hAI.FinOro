@@ -30,4 +30,4 @@ jobs:
         push: true
         tags: ghcr.io/${{ github.repository_owner }}/hai-finoro:latest
         cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/hai-finoro:buildcache
-        cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/hai-finoro:buildcache,mode=max
+        # cache-to omitted: type=registry export requires docker-container driver.
