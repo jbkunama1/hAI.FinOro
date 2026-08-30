@@ -6,7 +6,6 @@ import uuid
 import time
 import logging
 from typing import Any, Dict, List, Optional, Union
-from urllib.parse import urljoin
 
 from app.etoro.config import EtoroConfig
 from app.etoro.errors import EtoroApiError, RateLimitError
