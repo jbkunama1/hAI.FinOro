@@ -1,22 +1,11 @@
-name: github-space-shooter
-
+name: space-shooter
 on:
   schedule:
     - cron: '0 9 * * 1'
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
 jobs:
-  update-game:
+  space-shooter:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-      - uses: czl9707/gh-space-shooter@v2
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          output-path: 'game.gif'
-          strategy: 'random'
+      - uses: actions/checkout@v4
+      - name: Space Shooter
+        uses: github-space-shooter
