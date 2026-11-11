@@ -10,7 +10,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY app/ app/
 
+# Run as unprivileged user
+RUN useradd --create-home --uid 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
 # config.json is mounted via docker-compose volume (never baked into image)
+# Host file must be readable (chmod 644)
 VOLUME ["/app/config.json"]
 
 EXPOSE 5000
